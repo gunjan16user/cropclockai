@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CropClockAI - Privacy-First Multi-Agent System Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Dashboard Header -->
+  <header>
+    <div class="logo-container">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <h1>CropClockAI</h1>
+        <span>Privacy-First Multi-Agent Agronomy</span>
+      </div>
+    </div>
+    <div class="system-status" id="system-status-indicator">
+      <div class="status-indicator"></div>
+      <span id="system-status-text">System Active</span>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <div class="dashboard-container">
+    
+    <!-- LEFT PANEL: Configuration & Handset Ingestion -->
+    <aside class="panel">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+        </svg>
+        <span>Farmer Ingestion Channel</span>
+      </div>
+
+      <!-- Modality Selector -->
+      <div class="form-group">
+        <label>Modality Channel</label>
+        <div class="tab-container">
+          <button class="tab-btn active" id="btn-online" onclick="setModality('online')">Online (Image + GPS)</button>
+          <button class="tab-btn" id="btn-offline" onclick="setModality('offline')">Offline (SMS/Text)</button>
+        </div>
+      </div>
+
+      <!-- Crop Selector -->
+      <div class="form-group">
+        <label for="crop-type">Crop Type</label>
+        <select id="crop-type" class="select-input">
+          <option value="Tomatoes">Tomatoes (Solanum lycopersicum) - Vegetable</option>
+          <option value="Mangoes">Mangoes (Mangifera indica) - Fruit</option>
+          <option value="Bananas">Bananas (Musa acuminata) - Fruit</option>
+          <option value="Apples">Apples (Malus domestica) - Fruit</option>
+          <option value="Spinach">Spinach (Spinacia oleracea) - Vegetable</option>
+          <option value="Generic">Generic (Crop Classification) - General</option>
+        </select>
+        <span id="classification-badge" style="font-size: 0.75rem; color: var(--color-primary-light); font-weight: 700; margin-top: 0.25rem; display: none;">Dynamic Crop Judgment: --</span>
+      </div>
+
+      <!-- Location Input -->
+      <div class="form-group" id="location-online-group">
+        <label for="coordinates" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span>Location Coordinates (GPS)</span>
+          <button onclick="requestBrowserLocation()" class="tab-btn" style="padding: 0.15rem 0.5rem; font-size: 0.75rem; border: 1px solid var(--color-primary-light); background: transparent; border-radius: 0.25rem; cursor: pointer; color: var(--color-primary-light); max-width: fit-content; transition: var(--transition-smooth); margin: 0;" onmouseover="this.style.background='var(--color-primary-glow)'" onmouseout="this.style.background='transparent'">Locate Me</button>
+        </label>
+        <input type="text" id="coordinates" class="text-input" value="" placeholder="e.g. 18.989, 73.118">
+      </div>
+      <div class="form-group" id="location-offline-group" style="display: none;">
+        <label for="location-text">Location Text or Cell Tower ID</label>
+        <input type="text" id="location-text" class="text-input" value="" placeholder="e.g. Local Area Rural tower-02">
+      </div>
+
+      <!-- ONLINE IMAGE INPUT -->
+      <div class="form-group" id="image-input-group">
+        <label>Visual Agronomy Data (Upload Custom Crop Image)</label>
+        <input type="file" id="image-file-input" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
+        <div class="file-upload-container" onclick="triggerFileUpload()">
+          <svg class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span style="font-size: 0.8rem; color: var(--color-text-muted);" id="upload-status">Click to upload crop photo</span>
+        </div>
+        <div class="file-preview" id="image-preview" style="background-image: url('https://images.unsplash.com/photo-1595855759920-86582396756a?w=400'); display: block;">
+          <div class="file-preview-overlay">
+            <span style="font-size: 0.8rem; font-weight: bold;" id="preview-overlay-text">Simulated Upload Active</span>
+          </div>
+          <!-- Circle to Search Scanning Elements -->
+          <div class="scan-container" id="circle-scan-overlay">
+            <div class="scan-lasso"></div>
+            <div class="scan-overlay-text">
+              <span class="scan-spinner" style="display:inline-block; width:12px; height:12px; border:2px solid #34d399; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite;"></span>
+              <span id="scan-text-overlay">Gemini AI: Scanning Sweet Lime...</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="preset-images">
+          <button class="preset-img-btn active" style="background-image: url('https://images.unsplash.com/photo-1595855759920-86582396756a?w=100');" title="Ripe Tomato with Blemishes" onclick="selectPreset('ripe_blemished', this)"></button>
+          <button class="preset-img-btn" style="background-image: url('https://images.unsplash.com/photo-1582284540020-8acbe03f4924?w=100');" title="Healthy Green Tomato" onclick="selectPreset('healthy_green', this)"></button>
+          <button class="preset-img-btn" style="background-image: url('https://images.unsplash.com/photo-1607305387299-a3d9611cd46f?w=100');" title="Highly Decayed Tomato" onclick="selectPreset('decayed', this)"></button>
+          <button class="preset-img-btn" style="background-image: url('https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=100');" title="Blurry / Corrupted File" onclick="selectPreset('blurry', this)"></button>
+        </div>
+      </div>
+
+      <!-- OFFLINE TEXT INPUT -->
+      <div class="form-group" id="text-input-group" style="display: none;">
+        <label for="offline-description">SMS Raw Payload Input</label>
+        <textarea id="offline-description" class="textarea-input" placeholder="e.g. Tomatoes picked today. Very ripe. Location Local Area"></textarea>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted); display: flex; justify-content: space-between;">
+          <span>Presets:</span>
+          <span>
+            <a href="#" onclick="setOfflinePreset('ripe')" style="color: var(--color-primary-light); text-decoration: none;">Very ripe</a> | 
+            <a href="#" onclick="setOfflinePreset('bruised')" style="color: var(--color-primary-light); text-decoration: none;">Soft / Bruised</a> | 
+            <a href="#" onclick="setOfflinePreset('green')" style="color: var(--color-primary-light); text-decoration: none;">Firm green</a>
+          </span>
+        </div>
+      </div>
+
+      <!-- Consent Toggle -->
+      <div class="switch-container">
+        <div class="switch-label-group">
+          <span class="switch-title">Privacy Telemetry Consent</span>
+          <span class="switch-desc">log_consented_loss allowed</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="consent-switch" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Trigger Execution -->
+      <button class="btn btn-primary" onclick="runPipeline()">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        Execute Session Pipeline
+      </button>
+
+      <!-- SECURITY INJECTION SANDBOX -->
+      <div class="form-group sandbox-card" style="border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 0.75rem; padding: 0.75rem; margin-top: 0.5rem; background: rgba(239, 68, 68, 0.02);">
+        <label style="color: #fca5a5; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 0.25rem;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+          Security Interception Sandbox
+        </label>
+        <span style="font-size: 0.7rem; color: var(--color-text-muted); display: block; margin-bottom: 0.5rem;">Simulate prompt injection attack payload.</span>
+        <button class="btn btn-danger" style="padding: 0.4rem; font-size: 0.75rem; border-radius: 0.5rem;" onclick="injectAttack()">
+          Inject "IGNORE ALL PREVIOUS INSTRUCTIONS"
+        </button>
+      </div>
+
+      <!-- ANTIGRAVITY ADK STATUS CARD -->
+      <div class="form-group sandbox-card" style="border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 0.75rem; padding: 0.75rem; margin-top: 0.75rem; background: rgba(6, 182, 212, 0.02);">
+        <label style="color: #22d3ee; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 0.25rem;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.5 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.53c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
+          Antigravity ADK SDK Integration
+        </label>
+        <div style="font-size: 0.68rem; color: var(--color-text-muted); display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.35rem;">
+          <div style="display:flex; justify-content:space-between;"><span>Antigravity CLI:</span><span style="color:#34d399; font-weight:bold;">Ready (v1.0.15)</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>MCP Server Path:</span><span style="font-family:var(--font-mono); font-size:0.6rem; color:#a5b4fc;">mcp_server.py</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>Custom Rules:</span><span style="color:#fbbf24;">Active (.agents/AGENTS.md)</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>Dynamic Geocoding:</span><span style="color:#22d3ee;">Nominatim OpenStreetMap</span></div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- CENTER PANEL: Multi-Agent State Flow & Routing -->
+    <main class="panel canvas-panel">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.5 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.53c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+        <span>CropClock Multi-Agent Routing Grid</span>
+      </div>
+
+      <!-- Pipeline Visualization -->
+      <div class="pipeline-diagram">
+        <!-- SVG Connections -->
+        <svg class="pipeline-svg">
+          <path id="path-orch-vision" class="pipeline-path" d="" />
+          <path id="path-vision-shelf" class="pipeline-path" d="" />
+          <path id="path-shelf-market" class="pipeline-path" d="" />
+          <path id="path-market-advisory" class="pipeline-path" d="" />
+          
+          <path id="path-orch-refusal" class="pipeline-path error-path" d="" style="display:none;" />
+        </svg>
+
+        <!-- Row 1: Orchestrator -->
+        <div class="orchestrator-row">
+          <div class="agent-node orchestrator" id="node-orchestrator">
+            <div class="node-header">
+              <span class="node-badge">Orchestrator</span>
+              <span style="font-size: 0.65rem; color: var(--color-text-muted);">Session ID: Prod-01</span>
+            </div>
+            <div class="node-title">CropClockOrchestrator</div>
+            <div class="node-desc">Intercepts safety overrides, parses context variables, triggers pipeline routing flow.</div>
+            <div class="node-metric" id="metric-orch">
+              <span>Status:</span>
+              <span style="color: var(--color-text-muted);">Idle</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Sub-Agents Grid -->
+        <div class="subagents-row">
+          
+          <!-- Node 1: VisionAgent -->
+          <div class="agent-node" id="node-vision">
+            <div class="node-header">
+              <span class="node-badge">Vision Classifier</span>
+            </div>
+            <div class="node-title">VisionAgent</div>
+            <div class="node-desc">Evaluates image pixel decay levels, or parses text adjectives to calibrate condition baseline.</div>
+            <div class="node-metric">
+              <span>Index:</span>
+              <span id="metric-vision-idx">--</span>
+            </div>
+            <div class="node-metric">
+              <span>Conf:</span>
+              <span id="metric-vision-conf">--</span>
+            </div>
+          </div>
+
+          <!-- Node 2: ShelfLifePredictor -->
+          <div class="agent-node" id="node-shelflife" style="width: 250px;">
+            <div class="node-header">
+              <span class="node-badge">Decay Simulator</span>
+            </div>
+            <div class="node-title">ShelfLifePredictor</div>
+            <div class="node-desc">Fetches location weather vector & models cell respiration degradation rate metrics.</div>
+            <div class="node-metric">
+              <span>Temp/Humid:</span>
+              <span id="metric-shelf-temp">--</span>
+            </div>
+            <div class="node-metric">
+              <span>Hours Left:</span>
+              <span id="metric-shelf-hours" style="color: var(--color-accent); font-weight: 800;">--</span>
+            </div>
+            <div id="shelf-breakdown" style="font-size: 0.65rem; border-top: 1px solid var(--border-color); padding-top: 0.35rem; display: none; flex-direction: column; gap: 0.15rem; color: var(--color-text-muted);">
+              <div style="display:flex; justify-content:space-between;"><span>Base Shelf Life:</span><span id="bd-base">--</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>Ripeness Penalty:</span><span id="bd-ripeness" style="color:var(--color-danger);">--</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>Heat Respiration:</span><span id="bd-heat" style="color:var(--color-danger);">--</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>Storage Deficit:</span><span id="bd-deficit" style="color:var(--color-danger);">--</span></div>
+            </div>
+          </div>
+
+          <!-- Node 3: MarketMatchAgent -->
+          <div class="agent-node" id="node-market">
+            <div class="node-header">
+              <span class="node-badge">Logistical Router</span>
+            </div>
+            <div class="node-title">MarketMatchAgent</div>
+            <div class="node-desc">Queries regional buyers directories & current localized spot rate databases.</div>
+            <div class="node-metric">
+              <span>Best Buyer:</span>
+              <span id="metric-market-buyer">--</span>
+            </div>
+            <div class="node-metric">
+              <span>Price:</span>
+              <span id="metric-market-price">--</span>
+            </div>
+          </div>
+
+          <!-- Node 4: AdvisoryAgent -->
+          <div class="agent-node" id="node-advisory">
+            <div class="node-header">
+              <span class="node-badge">Linguistic SMS Formatter</span>
+            </div>
+            <div class="node-title">AdvisoryAgent</div>
+            <div class="node-desc">Synthesizes agent parameters into clean local advisory text templates.</div>
+            <div class="node-metric">
+              <span>Target:</span>
+              <span style="color: var(--color-primary-light);">SMS Handy</span>
+            </div>
+            <div class="node-metric">
+              <span>Length:</span>
+              <span id="metric-advisory-len">0 chars</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- AUDIT LOG CONSOLE -->
+      <div class="audit-panel">
+        <div style="font-size: 0.8rem; font-weight: 700; color: var(--color-text-muted); margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <span>System Ingestion Audit Log (Decoupled MCP Logs)</span>
+          <a href="#" onclick="clearConsole()" style="font-size: 0.7rem; color: var(--color-danger); text-decoration: none;">Clear Console</a>
+        </div>
+        <div class="console-body" id="console-logs">
+          <div class="console-line line-info">[SYSTEM] Session console initialized. Select a channel mode and execute the pipeline.</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT PANEL: Handset Delivery Simulator -->
+    <aside class="panel" style="justify-content: flex-start; gap: 1.5rem;">
+      <div class="panel-title">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>
+        </svg>
+        <span>Farmer GSM Handset</span>
+      </div>
+
+      <!-- Virtual Phone Simulator -->
+      <div class="phone-mockup">
+        <div class="phone-speaker"></div>
+        <div class="phone-screen">
+          <div class="phone-header">
+            <span>CropClock Gateway</span>
+            <span>LTE 📶 78%🔋</span>
+          </div>
+          
+          <div class="sms-chat-area" id="sms-inbox">
+            <!-- Simulated Incoming Ingestion (Farmer message) -->
+            <div class="sms-message sent" id="sms-farmer-sent" style="display: none;">
+              <span id="sms-farmer-sent-text">Uploaded crop image data</span>
+              <span class="sms-time" id="sms-farmer-sent-time">--:--</span>
+            </div>
+            
+            <!-- Simulated Response (Advisory SMS) -->
+            <div class="sms-message received" id="sms-advisory-received" style="display: none;">
+              <span id="sms-advisory-text">Advisory message compiling...</span>
+              <span class="sms-time" id="sms-advisory-time">--:--</span>
+            </div>
+          </div>
+
+          <div class="phone-footer">
+            <div class="phone-home-indicator"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Localized Refusal Indicator -->
+      <div class="advisory-refusal-alert" id="advisory-refusal-alert">
+        <strong>[SAFETY EXCEPTION] Refusal Block Triggered</strong><br>
+        <span id="refusal-alert-text">The system refused execution due to structural safety violations.</span>
+      </div>
+    </aside>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
