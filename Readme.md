@@ -1,13 +1,12 @@
-# CropClockAI - Privacy-First Multi-Agent Agronomy System
+# CropClockAI - Agents preventing Post-harvest loss 🍅⏱️
 
-> **Kaggle Agentic AI Competition Submission**  
-> **Track**: Agentic AI for Sustainability and Decision Support  
-> **Live Demo**: [Public URL / Localhost](http://localhost:8080)  
-> **Demo Video**: [YouTube Walkthrough](https://youtube.com)
+[![Kaggle Competition](https://img.shields.io/badge/Kaggle-Capstone%20Project-blue?logo=kaggle)](https://www.kaggle.com/competitions/agents-intensive-capstone-project)
+[![Framework](https://img.shields.io/badge/SDK-Google%20Antigravity-orange?logo=google)](https://github.com/google-antigravity/antigravity-sdk-python)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ---
 
-## 📌 Executive Summary
+## 📌 Overview
 CropClockAI is a privacy-first, multi-agent agronomical decision support system designed to minimize post-harvest loss for smallholder farmers. By combining local browser geocoding, real-time weather analytics, and decentralized commodity market data, CropClockAI calculates crop shelf-life degradation in real-time. It formulates optimal logistical sales routes and compiles secure, 320-character advisory dispatches delivered directly to standard GSM handsets—bypassing the need for constant high-bandwidth internet.
 
 Built on the **Google Agent Development Kit (ADK)** and the **Model Context Protocol (MCP)**, the platform coordinates multiple specialized sub-agents through a central, secure Orchestrator governed by strict prompt injection policies.
@@ -16,6 +15,35 @@ Built on the **Google Agent Development Kit (ADK)** and the **Model Context Prot
 
 ## 🛠️ Multi-Agent System Architecture
 
+
+## 🏗️ 2. System Architecture & Component Mapping
+
+CropClock AI implements a distributed **Multi-Agent & Tool-Serving Architecture** that isolates user-facing routing, visual interpretation, and safety evaluation into decoupled processes.
+
+```text
+                        [ User Multi-Modal Payload ]
+                                     │
+                                     ▼
+                     ┌───────────────────────────────┐
+                     │  Agent A: CropOrchestrator    │ ◄── [ Session State Memory ]
+                     └───────────────┬───────────────┘
+                                     │
+                        (Verified Payload Handoff)
+                                     │
+                                     ▼
+                     ┌───────────────────────────────┐
+                     │   Agent B: Vision Analyst     │ ◄── [ Security Interceptors ]
+                     └───────────────┬───────────────┘
+                                     │
+                       (JSON Parametric Execution)
+                                     │
+                                     ▼
+                     ┌───────────────────────────────┐
+                     │   Model Context Protocol      │ ◄── [ Agronomy Tools Engine ]
+                     │        (MCP Server)           │
+                     └───────────────────────────────┘
+```
+## 🛠️ Process 
 ```mermaid
 graph TD
     A[Farmer Ingestion: Image/Text] -->|Sanitation Policy| B(CropClockOrchestrator)
@@ -49,6 +77,25 @@ graph TD
 - Python 3.10+ (for backend MCP server testing)
 - Node.js (for local tunnel/npx tools, optional)
 - Docker (for container builds)
+
+
+cropclockai/
+│
+├── .agents/
+│   ├── AGENTS.md                  # High-level Multi-agent setup description
+│   └── skills/
+│       └── cropclock/
+│           ├── SKILL.md           # Declarative tool parameters configuration
+│           └── scripts/
+│               ├── cropclock_agents.py  # Orchestrator & sub-agent routines
+│               └── mcp_server.py        # Algorithmic tool server execution loop[cite: 1]
+│
+├── app.js                         # Offline cache logic & client routing orchestration[cite: 1]
+├── index.html                     # Mobile interface frontend layout[cite: 1]
+├── styles.css                     # Minimal user interface presentation styles[cite: 1]
+├── requirements.txt               # Main python packages locklist
+├── .gitignore                     # Git tracking exclusion list
+└── README.md                      # Your master formatted technical overview page
 
 ### 1. Run the FastAPI Server Locally
 1. Clone the repository and navigate to the directory:

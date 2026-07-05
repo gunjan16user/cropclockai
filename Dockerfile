@@ -1,27 +1,27 @@
-# Use a lightweight official Python environment
+# Use a lightweight official python runtime base image
 FROM python:3.11-slim
 
-# Prevent Python from writing pyc files and buffering stdout/stderr
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PORT=8080
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
+# Set the working directory inside the container
 WORKDIR /app
 
-# Install system dependencies needed for minimal image manipulation utilities
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Copy dependency specifications to leverage Docker layer caching
+COPY requirements.txt /app/
 
-# Copy and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install python dependencies
+RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 
-# Copy the rest of the application files
-COPY . .
+# Copy static frontend assets and main application code
+COPY index.html app.js styles.css main.py /app/
 
-# Expose target cloud port
+# Copy the custom multi-agent structures and policies
+COPY .agents /app/.agents
+
+# Expose the default Cloud Run port (8080)
 EXPOSE 8080
 
-# Execute the main agent gateway application script
-CMD ["python", ".agents/skills/cropclock/scripts/cropclock_agents.py"]
+# Launch the FastAPI server with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

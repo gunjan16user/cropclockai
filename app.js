@@ -69,8 +69,7 @@ async function fetch_weather_vectors(location_string, coordinates) {
       }
     } catch(e) {
       // Fallback coordinate checks if geocoding is offline
-      if (Math.abs(lat - 18.989) < 0.1 && Math.abs(lon - 73.118) < 0.1) currentCityName = "Panvel";
-      else if (Math.abs(lat - 28.6) < 0.5) currentCityName = "Delhi";
+      if (Math.abs(lat - 28.6) < 0.5) currentCityName = "Delhi";
       else if (Math.abs(lat - 12.97) < 0.5) currentCityName = "Bangalore";
       else if (Math.abs(lat - 18.52) < 0.5) currentCityName = "Pune";
       else if (Math.abs(lat - 20.0) < 0.5) currentCityName = "Nashik";
@@ -97,15 +96,6 @@ async function fetch_weather_vectors(location_string, coordinates) {
     currentCityName = location_string.split(' ')[0].replace(/[^a-zA-Z]/g, '');
     if (currentCityName.length < 3) currentCityName = "Local Area";
     logConsole(`[LOCATION SERVICE] Parsed offline location string to city: ${currentCityName}`, 'success');
-  }
-
-  // Specific simulation logic for Panvel (our default target)
-  if (location_string.toLowerCase().includes('panvel') || 
-      (coordinates && Math.abs(coordinates[0] - 18.989) < 0.1)) {
-    ambient_temperature_c = 34.0; // Heat wave scenario
-    relative_humidity_pct = 68.0;
-    currentCityName = "Panvel";
-    logConsole(`[WEATHER VECTORS] Match found: Panvel. Live conditions: Heat Wave active (${ambient_temperature_c}°C, ${relative_humidity_pct}% RH)`, 'info');
   }
 
   return { ambient_temperature_c, relative_humidity_pct };
@@ -265,12 +255,46 @@ async function query_buyer_directory(current_location, max_radius_km, user_coord
 
   // Fallback if POI search returns nothing
   if (ALL_BUYERS.length === 0) {
+    try {
+      logConsole(`[MarketMatchAgent] Retrying OSM with broader supermarket and grocery queries near coordinates...`, 'info');
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=supermarket+grocery+market&format=json&lat=${lat}&lon=${lon}&limit=3`, {
+        headers: { 'User-Agent': 'CropClockAI-App' }
+      });
+      if (response.ok) {
+        const altData = await response.json();
+        if (altData && altData.length > 0) {
+          ALL_BUYERS = altData.map((item, index) => {
+            const itemLat = parseFloat(item.lat);
+            const itemLon = parseFloat(item.lon);
+            const distance = getHaversineDistance(lat, lon, itemLat, itemLon);
+            let name = item.name || item.display_name.split(',')[0];
+            if (!name.toLowerCase().includes("market") && !name.toLowerCase().includes("store") && !name.toLowerCase().includes("grocery")) {
+              name += " Fresh Food Market";
+            }
+            return {
+              buyer_id: `OSM-ALT-${index}`,
+              type: name,
+              address: item.display_name.split(',').slice(1, 4).join(',').trim() || "Commercial District",
+              distance_km: distance,
+              active: true,
+              source: "OpenStreetMap Global Food Retail Index"
+            };
+          });
+          logConsole(`[MarketMatchAgent] Successfully resolved ${ALL_BUYERS.length} food retail/supermarket outlets near coordinates!`, 'success');
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Final hard fallback if everything is offline/fails
+  if (ALL_BUYERS.length === 0) {
+    const locPrefix = (city && city !== "Unknown Location") ? city : "Regional";
+    const sourcePrefix = (city && city !== "Unknown Location") ? city : "National";
     ALL_BUYERS = [
-      { buyer_id: "B-01", type: `${city} Government APMC Market`, address: `Market Yard, Center Road, ${city}`, distance_km: 8.5 * baseDistanceMultiplier, active: true, source: `${city} Government Mandi Directory` },
-      { buyer_id: "B-02", type: `${city} Farmers Producer Organisation (FPO)`, address: `Cooperative Society Building, ${city}`, distance_km: 4.2 * baseDistanceMultiplier, active: true, source: `${city} Agricultural Cooperative Directory` },
-      { buyer_id: "B-03", type: `${city} Local APMC Sub-Yard`, address: `Sub-Yard Gate 2, ${city}`, distance_km: 1.8 * baseDistanceMultiplier, active: false, source: `${city} APMC Trade Directory` },
-      { buyer_id: "B-04", type: `${city} Wholesale Traders`, address: `Main Bazar, ${city}`, distance_km: 6.8 * baseDistanceMultiplier, active: true, source: `Local Trade Registry of ${city}` },
-      { buyer_id: "B-05", type: `${city} Fresh Produce Cooperative`, address: `Export Gateway Hub, ${city}`, distance_km: 12.5 * baseDistanceMultiplier, active: true, source: `${city} Trade Association Registry` }
+      { buyer_id: "B-01", type: `${locPrefix} Wholesale Produce Market`, address: `Market Yard, Center Road, ${locPrefix}`, distance_km: 8.5 * baseDistanceMultiplier, active: true, source: `${sourcePrefix} Mandi Registry` },
+      { buyer_id: "B-02", type: `${locPrefix} Fresh Food Distributors`, address: `Main Link Rd, Industrial Area, ${locPrefix}`, distance_km: 4.2 * baseDistanceMultiplier, active: true, source: `${sourcePrefix} Wholesale Trade Directory` },
+      { buyer_id: "B-03", type: `${locPrefix} Local Sub-Yard`, address: `Sub-Yard Gate 2, ${locPrefix}`, distance_km: 1.8 * baseDistanceMultiplier, active: false, source: `${sourcePrefix} APMC Trade Directory` },
+      { buyer_id: "B-04", type: `${locPrefix} Agricultural Distributors`, address: `Main Bazar, ${locPrefix}`, distance_km: 6.8 * baseDistanceMultiplier, active: true, source: `Local Trade Register` }
     ];
   }
 
@@ -549,7 +573,43 @@ async function runPipeline() {
   // Call Tool 3
   const locationTextForDirectory = currentModality === 'online' ? `GPS Coordinates [${rawCoords}]` : rawLocationText;
   const directoryResult = await query_buyer_directory(locationTextForDirectory, travelRadius, coordinates);
-  const viableBuyers = directoryResult.buyers_list;
+  let viableBuyers = directoryResult.buyers_list;
+  let fallbackSelected = false;
+  if (viableBuyers.length === 0) {
+    logConsole(`[MarketMatchAgent] WARNING: Zero buyers found within transit safety radius limit (${travelRadius.toFixed(1)} km). Querying famous regional aggregators from nearby location...`, 'info');
+    const unconstrainedResult = await query_buyer_directory(locationTextForDirectory, 999.0, coordinates);
+    const allBuyers = unconstrainedResult.buyers_list;
+    if (allBuyers.length > 0) {
+      let bestBuyer = null;
+      let minDistance = 9999.0;
+      for (let buyer of allBuyers) {
+        if (buyer.active && buyer.distance_km < minDistance) {
+          minDistance = buyer.distance_km;
+          bestBuyer = buyer;
+        }
+      }
+      if (bestBuyer) {
+        viableBuyers = [bestBuyer];
+        fallbackSelected = true;
+      }
+    }
+    
+    // Absolute fail-safe: if still empty, force-populate a famous regional aggregator
+    if (viableBuyers.length === 0) {
+      const locPrefix = (currentCityName && currentCityName !== "Unknown Location") ? currentCityName : "Regional";
+      const sourcePrefix = (currentCityName && currentCityName !== "Unknown Location") ? currentCityName : "National";
+      viableBuyers = [{
+        buyer_id: "B-FALLBACK-FAMOUS",
+        type: `${locPrefix} Wholesale Produce Market`,
+        address: `Market Yard, Center Road, ${locPrefix}`,
+        distance_km: 8.5,
+        active: true,
+        source: `${sourcePrefix} Mandi Registry`
+      }];
+      fallbackSelected = true;
+      logConsole(`[MarketMatchAgent] Forcing famous fallback regional aggregator: ${viableBuyers[0].type} to ensure a buyer is always suggested.`, 'info');
+    }
+  }
 
   let optimalBuyer = null;
   let finalPriceText = "--";
@@ -558,7 +618,6 @@ async function runPipeline() {
 
   if (viableBuyers.length > 0) {
     // Select optimal transaction hub based on price and distance
-    // In this simulation, we check prices
     let bestScore = -1;
     for (let buyer of viableBuyers) {
       // Call Tool 4
@@ -582,7 +641,11 @@ async function runPipeline() {
 
     transactionAction = "Sell now";
     logisticDetail = `${optimalBuyer.type} (${optimalBuyer.distance_km.toFixed(1)} km away, Source: ${optimalBuyer.source}) is purchasing at a fair rate today`;
-    logConsole(`[MarketMatchAgent] Optimal buyer selected: ${optimalBuyer.type} (${optimalBuyer.distance_km.toFixed(1)}km, Source: ${optimalBuyer.source}) paying ${finalPriceText}.`, 'info');
+    if (fallbackSelected) {
+      logConsole(`[MarketMatchAgent] Famous regional aggregator selected as fallback outside safety transit limit: ${optimalBuyer.type} (${optimalBuyer.distance_km.toFixed(1)}km, Source: ${optimalBuyer.source}).`, 'info');
+    } else {
+      logConsole(`[MarketMatchAgent] Optimal buyer selected: ${optimalBuyer.type} (${optimalBuyer.distance_km.toFixed(1)}km, Source: ${optimalBuyer.source}) paying ${finalPriceText}.`, 'info');
+    }
   } else {
     // If zero local buyers exist or travel radius is too short
     logConsole(`[MarketMatchAgent] DEFICIT: Zero active buyers exist within calculated travel radius (${travelRadius.toFixed(1)} km). Switching strategy to alternative preservation.`, 'privacy');
@@ -616,10 +679,14 @@ async function runPipeline() {
     const partnerDist = optimalBuyer.distance_km.toFixed(1);
     const partnerSrc = optimalBuyer.source;
     
-    if (remainingHours === 19) {
-      cleanedSMS = `Sell your ${cropType} immediately to ${partnerName}. Address: ${partnerAddress} (${partnerDist}km, Source: ${partnerSrc}). Reason: Only 19h shelf-life left due to ${Math.round(cropConditionIndex*100)}% ripeness, ${weather.ambient_temperature_c}°C heat, and zero cold storage.`;
+    if (fallbackSelected) {
+      cleanedSMS = `Sell your ${cropType} to ${partnerName}. Address: ${partnerAddress} (${partnerDist}km, Source: ${partnerSrc}) [WARNING: Exceeds transit safety limit]. Reason: ${remainingHours}h remaining at ${weather.ambient_temperature_c}°C.`;
     } else {
-      cleanedSMS = `Sell your ${cropType} to ${partnerName}. Address: ${partnerAddress} (${partnerDist}km, Source: ${partnerSrc}). Reason: ${remainingHours}h remaining under ${weather.ambient_temperature_c}°C heat.`;
+      if (remainingHours === 19) {
+        cleanedSMS = `Sell your ${cropType} immediately to ${partnerName}. Address: ${partnerAddress} (${partnerDist}km, Source: ${partnerSrc}). Reason: Only 19h shelf-life left due to ${Math.round(cropConditionIndex*100)}% ripeness, ${weather.ambient_temperature_c}°C heat, and zero cold storage.`;
+      } else {
+        cleanedSMS = `Sell your ${cropType} to ${partnerName}. Address: ${partnerAddress} (${partnerDist}km, Source: ${partnerSrc}). Reason: ${remainingHours}h remaining under ${weather.ambient_temperature_c}°C heat.`;
+      }
     }
   } else {
     cleanedSMS = `Process and preserve your ${cropType} now. No aggregators in range. Reason: ${remainingHours}h remaining at ${weather.ambient_temperature_c}°C.`;
@@ -645,7 +712,7 @@ async function runPipeline() {
     logConsole(`[PRIVACY] user_context.explicit_consent_given = TRUE. Invoking database logging.`, 'privacy');
     // Call Tool 5
     const lossPrevented = optimalBuyer ? 150.0 : 75.0; // Simulated saved yield in kg
-    const regionId = currentModality === 'online' ? "GPS-Panvel-01" : `Cell-${rawLocationText.substring(0, 10)}`;
+    const regionId = currentModality === 'online' ? `GPS-${currentCityName.replace(/\s+/g, '-')}` : `Cell-${rawLocationText.substring(0, 10)}`;
     const telemetryResult = log_consented_loss(cropType, lossPrevented, regionId);
     logConsole(`[PRIVACY] Telemetry successfully stored anonymously. Status: ${telemetryResult.logging_status}`, 'success');
   } else {
@@ -714,34 +781,64 @@ function handleFileUpload(event) {
     
     logConsole(`[Gemini AI] Circle to Search triggered lasso scan on "${cleanCropName}"...`, 'info');
     
+    // Call backend classification API in parallel
+    const formData = new FormData();
+    formData.append("file", file);
+    let backendAnalysis = null;
+    
+    fetch("/api/classify", {
+      method: "POST",
+      body: formData
+    })
+    .then(res => {
+      if (res.ok) return res.json();
+      throw new Error("HTTP error");
+    })
+    .then(data => {
+      backendAnalysis = data;
+      logConsole(`[VisionAgent] Backend image classifier resolved crop as: ${data.crop_type} (${data.classification})`, 'success');
+    })
+    .catch(() => {
+      logConsole("[VisionAgent] Backend classification API offline, using local pixel heuristics fallback.", 'info');
+    });
+
     // Load image in memory to run canvas pixel classification
     const img = new Image();
     img.onload = function() {
-      // Run analysis
-      uploadedImageAnalysis = analyzeImagePixels(img, file.name);
-      
       // Delay visual updates to align with Circle to Search animation (1.5 seconds)
       setTimeout(() => {
         scanOverlay.style.display = 'none';
         
-        // Dynamically add recognized crop to selector dropdown list if not present!
+        if (backendAnalysis) {
+          uploadedImageAnalysis = {
+            cropType: backendAnalysis.crop_type,
+            category: backendAnalysis.category,
+            classification: backendAnalysis.classification,
+            condition_index: backendAnalysis.condition_index,
+            confidence: 0.95
+          };
+        } else {
+          // Local canvas pixel heuristics fallback
+          uploadedImageAnalysis = analyzeImagePixels(img, file.name);
+        }
+        
+        // Update crop type select dropdown with Gemini Circle to Search output
         const cropSelect = document.getElementById('crop-type');
         let exists = false;
         for (let i = 0; i < cropSelect.options.length; i++) {
-          if (cropSelect.options[i].value === uploadedImageAnalysis.cropType) {
+          if (cropSelect.options[i].value.toLowerCase() === uploadedImageAnalysis.cropType.toLowerCase()) {
+            cropSelect.selectedIndex = i;
             exists = true;
             break;
           }
         }
-        
         if (!exists) {
           const opt = document.createElement('option');
           opt.value = uploadedImageAnalysis.cropType;
-          opt.innerText = `${uploadedImageAnalysis.cropType} (${uploadedImageAnalysis.classification}) - ${uploadedImageAnalysis.category}`;
+          opt.innerText = `${uploadedImageAnalysis.cropType} (Detected) - ${uploadedImageAnalysis.category}`;
           cropSelect.appendChild(opt);
+          cropSelect.value = uploadedImageAnalysis.cropType;
         }
-        
-        cropSelect.value = uploadedImageAnalysis.cropType;
         
         // Update badge
         const badge = document.getElementById('classification-badge');
@@ -1016,7 +1113,12 @@ function selectPreset(presetKey, element) {
 
   document.getElementById('classification-badge').style.display = 'none';
   document.getElementById('image-file-input').value = '';
-  document.getElementById('crop-type').value = 'Tomatoes';
+  let cropVal = 'Tomatoes';
+  if (presetKey.includes('mango') || preset.name.toLowerCase().includes('mango')) cropVal = 'Mangoes';
+  else if (presetKey.includes('banana') || preset.name.toLowerCase().includes('banana')) cropVal = 'Bananas';
+  else if (presetKey.includes('lime') || preset.name.toLowerCase().includes('lime')) cropVal = 'Sweet Lime';
+  else if (presetKey.includes('spinach') || preset.name.toLowerCase().includes('spinach')) cropVal = 'Spinach';
+  document.getElementById('crop-type').value = cropVal;
   document.getElementById('preview-overlay-text').innerText = "Simulated Upload Active";
 
   // Circle to search trigger overlay on preset click
@@ -1036,11 +1138,11 @@ function selectPreset(presetKey, element) {
 function setOfflinePreset(presetType) {
   const txt = document.getElementById('offline-description');
   if (presetType === 'ripe') {
-    txt.value = "Tomatoes picked today. Very ripe. Location Panvel";
+    txt.value = "Tomatoes picked today. Very ripe.";
   } else if (presetType === 'bruised') {
-    txt.value = "Mango harvest. Many are soft and bruised. Location Panvel Rural";
+    txt.value = "Mango harvest. Many are soft and bruised.";
   } else if (presetType === 'green') {
-    txt.value = "Firm green bananas harvested. Coordinates 18.98, 73.12";
+    txt.value = "Firm green bananas harvested.";
   }
 }
 

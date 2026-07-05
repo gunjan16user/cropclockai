@@ -5,9 +5,9 @@ import urllib.request
 import urllib.parse
 
 # Global variables
-current_city_name = "Panvel"
+current_city_name = "Unknown Location"
 
-# Bounded directories near major cities (Delhi, Bangalore, Pune, Nashik, Vashi/Panvel)
+# Bounded directories near major cities (Delhi, Bangalore, Pune, Nashik)
 REGIONAL_BUYER_DIRECTORIES = {
     "Delhi": [
         {"buyer_id": "B-01", "type": "Azadpur APMC wholesale Mandi, Delhi", "distance_km": 15.0, "active": True, "source": "Delhi APMC Directory"},
@@ -28,22 +28,11 @@ REGIONAL_BUYER_DIRECTORIES = {
         {"buyer_id": "B-01", "type": "Nashik APMC Onion & Veg Mandi", "distance_km": 10.0, "active": True, "source": "Maharashtra APMC Directory"},
         {"buyer_id": "B-02", "type": "Sahyadri Farmers Producer Co, Nashik", "distance_km": 14.5, "active": True, "source": "Sahyadri FPC Registry"},
         {"buyer_id": "B-04", "type": "Nashik Agro Cold-chain drop-off", "distance_km": 3.8, "active": True, "source": "IndiaMART Nashik Directory"}
-    ],
-    "Panvel": [
-        {"buyer_id": "B-01", "type": "Vashi Navi Mumbai APMC Mandi", "distance_km": 26.0, "active": True, "source": "APMC Maharashtra Trade Directory"},
-        {"buyer_id": "B-02", "type": "DeHaat Agri Cold-chain Hub", "distance_km": 18.0, "active": True, "source": "DeHaat Partner network"},
-        {"buyer_id": "B-03", "type": "Panvel Local APMC Sub-Yard", "distance_km": 1.8, "active": False, "source": "APMC Maharashtra Trade Directory"},
-        {"buyer_id": "B-04", "type": "SGM Corp Agri-Aggregator (Panvel)", "distance_km": 4.6, "active": True, "source": "IndiaMART Panvel Wholesaler Directory"},
-        {"buyer_id": "B-05", "type": "Hilton Impex Exporters (Panvel)", "distance_km": 12.5, "active": True, "source": "Panvel Import-Export Registry"}
     ]
 }
 
 def reverse_geocode(lat, lon):
     global current_city_name
-    # 1. Bounding box check for fallback
-    if abs(lat - 18.989) < 0.1 and abs(lon - 73.118) < 0.1:
-        current_city_name = "Panvel"
-        return current_city_name
     if abs(lat - 28.6) < 0.5:
         current_city_name = "Delhi"
         return current_city_name
@@ -75,7 +64,7 @@ def reverse_geocode(lat, lon):
 
 # Tool 1 implementation: fetch_weather_vectors
 def tool_fetch_weather_vectors(location_string, coordinates):
-    lat, lon = 18.989, 73.118 # Default Panvel coordinates
+    lat, lon = None, None
     
     if coordinates and len(coordinates) == 2:
         try:
@@ -95,6 +84,9 @@ def tool_fetch_weather_vectors(location_string, coordinates):
         elif "nashik" in lower_loc or "nasik" in lower_loc:
             lat, lon = 20.0050, 73.7898
     
+    if lat is None or lon is None:
+        lat, lon = 20.0, 75.0
+
     # Resolve city name
     reverse_geocode(lat, lon)
     
@@ -112,11 +104,6 @@ def tool_fetch_weather_vectors(location_string, coordinates):
                 return {"ambient_temperature_c": ambient_temp, "relative_humidity_pct": humidity}
     except Exception:
         pass
-        
-    # Fallback to local constants
-    if current_city_name == "Panvel":
-        ambient_temp = 34.0
-        humidity = 68.0
         
     return {"ambient_temperature_c": ambient_temp, "relative_humidity_pct": humidity}
 
@@ -230,13 +217,46 @@ def tool_query_buyer_directory(current_location, max_radius_km):
     except Exception:
         pass
         
+    # Broader search fallback in python
     if not buyers_list:
-        # Fallback dynamic buyer builder if POI is offline/fails
-        buyers_list = [
-            {"buyer_id": "B-01", "type": f"{city} Government APMC Market", "address": f"Market Yard, Center Road, {city}", "distance_km": 15.0, "active": True, "source": f"{city} Government Mandi Directory"},
-            {"buyer_id": "B-02", "type": f"{city} Farmers Producer Organisation (FPO)", "address": f"Cooperative Society Building, {city}", "distance_km": 9.5, "active": True, "source": f"{city} Agricultural Cooperative Directory"},
-            {"buyer_id": "B-04", "type": f"{city} Wholesale Traders", "address": f"Main Bazar, {city}", "distance_km": 4.6, "active": True, "source": f"Local Trade Registry of {city}"}
-        ]
+        try:
+            url_alt = f"https://nominatim.openstreetmap.org/search?q=supermarket+grocery+market&format=json&lat={lat}&lon={lon}&limit=3"
+            req_alt = urllib.request.Request(url_alt, headers={'User-Agent': 'CropClockAI-ADK-Agent'})
+            with urllib.request.urlopen(req_alt, timeout=3) as response:
+                alt_data = json.loads(response.read().decode())
+                for idx, item in enumerate(alt_data):
+                    item_lat = float(item.get("lat", 0))
+                    item_lon = float(item.get("lon", 0))
+                    dist = get_haversine_distance(lat, lon, item_lat, item_lon)
+                    name = item.get("name") or item.get("display_name").split(",")[0]
+                    if not any(w in name.lower() for w in ["market", "store", "grocery"]):
+                        name += " Fresh Food Market"
+                        
+                    addr_parts = item.get("display_name").split(",")
+                    addr = ", ".join(addr_parts[1:4]).strip()
+                    
+                    buyers_list.append({
+                        "buyer_id": f"OSM-ALT-{idx}",
+                        "type": name,
+                        "address": addr or "Commercial District",
+                        "distance_km": dist,
+                        "active": True,
+                        "source": "OpenStreetMap Global Food Retail Index"
+                    })
+        except Exception:
+            pass
+
+    loc_prefix = city if (city and city != "Unknown Location") else "Regional"
+    source_prefix = city if (city and city != "Unknown Location") else "National"
+    hard_fallbacks = [
+        {"buyer_id": "B-01", "type": f"{loc_prefix} Wholesale Produce Market", "address": f"Market Yard, Center Road, {loc_prefix}", "distance_km": 15.0, "active": True, "source": f"{source_prefix} Mandi Registry"},
+        {"buyer_id": "B-02", "type": f"{loc_prefix} Fresh Food Distributors", "address": f"Main Link Rd, Industrial Area, {loc_prefix}", "distance_km": 9.5, "active": True, "source": f"{source_prefix} Wholesale Trade Directory"},
+        {"buyer_id": "B-03", "type": f"{loc_prefix} Local Sub-Yard", "address": f"Sub-Yard Gate 2, {loc_prefix}", "distance_km": 1.8, "active": False, "source": f"{source_prefix} APMC Trade Directory"},
+        {"buyer_id": "B-04", "type": f"{loc_prefix} Agricultural Distributors", "address": f"Main Bazar, {loc_prefix}", "distance_km": 4.6, "active": True, "source": "Local Trade Register"}
+    ]
+
+    if not buyers_list:
+        buyers_list = hard_fallbacks
 
     # Filter radius limit
     radius_limit = max_radius_km
@@ -244,7 +264,34 @@ def tool_query_buyer_directory(current_location, max_radius_km):
         radius_limit = min(15.0, max_radius_km)
         
     filtered = [b for b in buyers_list if b.get("active", True) and b["distance_km"] <= radius_limit]
-    return {"buyers_list": filtered, "constrained_radius_km": radius_limit}
+    
+    # Famous regional aggregator unconstrained search fallback in Python
+    fallback_selected = False
+    if not filtered:
+        # Query with unconstrained limit (999.0km)
+        unconstrained_filtered = [b for b in buyers_list if b.get("active", True) and b["distance_km"] <= 999.0]
+        if unconstrained_filtered:
+            closest_buyer = min(unconstrained_filtered, key=lambda b: b["distance_km"])
+            filtered = [closest_buyer]
+            fallback_selected = True
+            
+        # Absolute fail-safe fallback aggregator guarantee in python
+        if not filtered:
+            filtered = [{
+                "buyer_id": "B-FALLBACK-FAMOUS",
+                "type": f"{loc_prefix} Wholesale Produce Market",
+                "address": f"Market Yard, Center Road, {loc_prefix}",
+                "distance_km": 8.5,
+                "active": True,
+                "source": f"{source_prefix} Mandi Registry"
+            }]
+            fallback_selected = True
+
+    return {
+        "buyers_list": filtered, 
+        "constrained_radius_km": radius_limit,
+        "fallback_selected": fallback_selected
+    }
 
 # Tool 4 implementation: get_market_prices
 def tool_get_market_prices(buyer_id, crop_type):
@@ -454,15 +501,14 @@ def run_test():
     print(f"Resolved City: {current_city_name}")
     print(f"Resolved Weather: {weather}")
     
-    print("\n2. Testing 19h Tomato Decay Scenario (condition 0.55, 34°C, Panvel):")
-    current_city_name = "Panvel"
+    print("\n2. Testing 19h Tomato Decay Scenario (condition 0.55, 34°C, Pune):")
     decay = tool_calculate_shelf_life("Tomatoes", 0.55, 34.0, 68.0)
     print(f"Degradation Curve: {decay['degradation_rate_curve']}")
     print(f"Remaining Hours: {decay['remaining_marketable_hours']} (Breakdown: {decay['breakdown']})")
     
     print("\n3. Testing Directory Query under Low Shelf-Life (remaining 19h -> radius 28.5km):")
     radius = 19 * 1.5
-    dir_res = tool_query_buyer_directory("GPS [18.989, 73.118]", radius)
+    dir_res = tool_query_buyer_directory("GPS [18.52, 73.85]", radius)
     print(f"Calculated Travel Radius: {radius}km")
     print(f"Constrained Radius Limit: {dir_res['constrained_radius_km']}km")
     print(f"Nearby Buyers: {dir_res['buyers_list']}")

@@ -1,5 +1,2 @@
-google-antigravity>=2.0.1
-fastapi>=0.110.0
-uvicorn>=0.28.0
-pydantic>=2.6.0
-pillow>=10.2.0
+fastapi>=0.100.0
+uvicorn>=0.22.0
