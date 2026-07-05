@@ -78,8 +78,7 @@ graph TD
 - Python 3.10+ (for backend MCP server testing)
 - Node.js (for local tunnel/npx tools, optional)
 - Docker (for container builds)
-
-
+````
 cropclockai/
 ├── .agents/
 │   ├── AGENTS.md
@@ -95,7 +94,7 @@ cropclockai/
 ├── requirements.txt
 ├── .gitignore
 └── README.md
-
+```
 ### 1. Run the FastAPI Server Locally
 1. Clone the repository and navigate to the directory:
    ```bash
