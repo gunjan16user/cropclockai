@@ -81,22 +81,20 @@ graph TD
 
 
 cropclockai/
-│
 ├── .agents/
-│   ├── AGENTS.md                  # High-level Multi-agent setup description
+│   ├── AGENTS.md
 │   └── skills/
 │       └── cropclock/
-│           ├── SKILL.md           # Declarative tool parameters configuration
+│           ├── SKILL.md
 │           └── scripts/
-│               ├── cropclock_agents.py  # Orchestrator & sub-agent routines
-│               └── mcp_server.py        # Algorithmic tool server execution loop[cite: 1]
-│
-├── app.js                         # Offline cache logic & client routing orchestration[cite: 1]
-├── index.html                     # Mobile interface frontend layout[cite: 1]
-├── styles.css                     # Minimal user interface presentation styles[cite: 1]
-├── requirements.txt               # Main python packages locklist
-├── .gitignore                     # Git tracking exclusion list
-└── README.md                      # Your master formatted technical overview page
+│               ├── cropclock_agents.py
+│               └── mcp_server.py
+├── app.js
+├── index.html
+├── styles.css
+├── requirements.txt
+├── .gitignore
+└── README.md
 
 ### 1. Run the FastAPI Server Locally
 1. Clone the repository and navigate to the directory:
