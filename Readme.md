@@ -78,7 +78,7 @@ graph TD
 - Python 3.10+ (for backend MCP server testing)
 - Node.js (for local tunnel/npx tools, optional)
 - Docker (for container builds)
-````
+```
 cropclockai/
 ├── .agents/
 │   ├── AGENTS.md
