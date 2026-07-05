@@ -44,6 +44,7 @@ CropClock AI implements a distributed **Multi-Agent & Tool-Serving Architecture*
                      └───────────────────────────────┘
 ```
 ## 🛠️ Process 
+
 ```mermaid
 graph TD
     A[Farmer Ingestion: Image/Text] -->|Sanitation Policy| B(CropClockOrchestrator)
